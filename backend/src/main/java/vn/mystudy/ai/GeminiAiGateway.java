@@ -7,6 +7,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,30 +117,51 @@ class GeminiAiGateway implements AiGateway {
         }
     }
 
-    /** Gửi yêu cầu; tự động chuyển sang mô hình/endpoint tương thích nếu 404 (do phiên bản v1 vs v1beta của Google). */
+    /** Gửi yêu cầu; tự động chuyển sang mô hình/endpoint tương thích nếu 404 (sai tên) hoặc 503 (quá tải). */
     private HttpResponse<String> send(HttpRequest request, String jsonPayload) {
         HttpResponse<String> response = executeWithRetry(request);
         int status = response.statusCode();
         if (status == 200) return response;
 
-        if (status == 404) {
+        if (status == 404 || status == 503) {
             String uriStr = request.uri().toString();
-            String fallbackUri = null;
-            if (uriStr.contains("gemini-1.5") || uriStr.contains("gemini-2.0") || uriStr.contains("gemini-2.5")) {
-                fallbackUri = uriStr.replaceAll("gemini-[12]\\.[05]-flash", "gemini-3.8-flash");
-            } else if (uriStr.contains("/v1/models/")) {
-                fallbackUri = uriStr.replace("/v1/models/", "/v1beta/models/");
+            List<String> fallbacks = new ArrayList<>();
+            if (uriStr.contains("gemini-3")) {
+                fallbacks.add("gemini-2.5-flash-lite");
+                fallbacks.add("gemini-2.5-flash");
+            } else if (uriStr.contains("gemini-2.5-flash-lite")) {
+                fallbacks.add("gemini-2.5-flash");
+                fallbacks.add("gemini-3.8-flash");
+            } else {
+                fallbacks.add("gemini-2.5-flash-lite");
+                fallbacks.add("gemini-2.5-flash");
             }
-            if (fallbackUri != null && !fallbackUri.equals(uriStr)) {
-                log.info("Gemini 404 on {}, trying fallback URI {}", uriStr, fallbackUri);
+
+            for (String fallbackModel : fallbacks) {
+                String fallbackUri = uriStr.replaceAll("/models/[^:]+:", "/models/" + fallbackModel + ":");
+                if (uriStr.contains("/v1/models/")) {
+                    fallbackUri = fallbackUri.replace("/v1/models/", "/v1beta/models/");
+                }
+                if (fallbackUri.equals(uriStr)) continue;
+
+                log.info("Gemini status {} on {}, trying fallback model {} ({})", status, uriStr, fallbackModel, fallbackUri);
+
+                String fallbackPayload = jsonPayload;
+                if (!fallbackModel.contains("gemini-3")) {
+                    fallbackPayload = fallbackPayload.replaceAll(",\"thinkingConfig\":\\{[^}]*\\}", "")
+                            .replaceAll("\"thinkingConfig\":\\{[^}]*\\},?", "");
+                }
+
                 HttpRequest fallbackReq = HttpRequest.newBuilder(URI.create(fallbackUri))
                         .timeout(Duration.ofSeconds(35))
                         .header("Content-Type", "application/json")
                         .header("x-goog-api-key", apiKey)
-                        .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                        .POST(HttpRequest.BodyPublishers.ofString(fallbackPayload, StandardCharsets.UTF_8))
                         .build();
+
                 HttpResponse<String> fallbackRes = executeWithRetry(fallbackReq);
                 if (fallbackRes.statusCode() == 200) {
+                    log.info("Gemini fallback to {} succeeded (200 OK)", fallbackModel);
                     return fallbackRes;
                 }
                 response = fallbackRes;
@@ -149,7 +171,8 @@ class GeminiAiGateway implements AiGateway {
 
         if (status == 400 && jsonPayload.contains("thinkingConfig")) {
             log.info("Gemini 400 with thinkingConfig, retrying without thinkingConfig");
-            String strippedPayload = jsonPayload.replaceAll(",\"thinkingConfig\":\\{[^}]*\\}", "");
+            String strippedPayload = jsonPayload.replaceAll(",\"thinkingConfig\":\\{[^}]*\\}", "")
+                    .replaceAll("\"thinkingConfig\":\\{[^}]*\\},?", "");
             HttpRequest retryReq = HttpRequest.newBuilder(request.uri())
                     .timeout(Duration.ofSeconds(35))
                     .header("Content-Type", "application/json")
@@ -173,7 +196,7 @@ class GeminiAiGateway implements AiGateway {
         }
         if (status == 503) {
             throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
-                    "Máy chủ Google Gemini đang bị quá tải tạm thời (503 High Demand). Vui lòng thử lại sau 1-2 phút.");
+                    "Máy chủ Google Gemini đang bị quá tải tạm thời (503 High Demand). Vui lòng thử lại sau 1-2 phút hoặc chuyển sang model gemini-2.5-flash-lite.");
         }
         if (status == 400 || status == 401 || status == 403 || status == 404) {
             throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
