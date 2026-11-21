@@ -23,7 +23,7 @@ class AiConfig {
     AiGateway aiGateway(ObjectMapper json, boolean enabled, String provider, String anthropicKey, String anthropicModel,
             String geminiKey, String geminiModel, String geminiBaseUrl) {
         return aiGateway(json, enabled, provider, anthropicKey, anthropicModel, geminiKey, geminiModel, geminiBaseUrl,
-                "", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1");
+                "", "llama-3.1-8b-instant", "https://api.groq.com/openai/v1");
     }
 
     @Bean
@@ -37,7 +37,7 @@ class AiConfig {
             @Value("${app.ai.gemini-model:gemini-2.5-flash-lite}") String geminiModel,
             @Value("${app.ai.gemini-base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl,
             @Value("${app.ai.groq-api-key:}") String groqKey,
-            @Value("${app.ai.groq-model:llama-3.3-70b-versatile}") String groqModel,
+            @Value("${app.ai.groq-model:llama-3.1-8b-instant}") String groqModel,
             @Value("${app.ai.groq-base-url:https://api.groq.com/openai/v1}") String groqBaseUrl) {
         String p = provider != null ? provider.trim().toLowerCase() : "gemini";
         if ("groq".equals(p) || (groqKey != null && !groqKey.isBlank() && (geminiKey == null || geminiKey.isBlank()))) {

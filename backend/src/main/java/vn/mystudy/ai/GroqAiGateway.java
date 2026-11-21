@@ -40,7 +40,7 @@ class GroqAiGateway implements AiGateway {
         this.json = json;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.apiKey = apiKey;
-        this.model = (model == null || model.isBlank()) ? "llama-3.3-70b-versatile" : model;
+        this.model = (model == null || model.isBlank()) ? "llama-3.1-8b-instant" : model;
     }
 
     @Override
@@ -104,6 +104,36 @@ class GroqAiGateway implements AiGateway {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             int status = response.statusCode();
             if (status == 200) return response;
+
+            // Nếu model 404 (không tồn tại hoặc tài khoản chưa cấp quyền), thử các model mặc định khả dụng
+            if (status == 404) {
+                List<String> fallbacks = List.of(
+                        "llama-3.1-8b-instant",
+                        "mixtral-8x7b-32768",
+                        "gemma2-9b-it"
+                );
+                for (String fallbackModel : fallbacks) {
+                    if (fallbackModel.equalsIgnoreCase(model)) continue;
+                    log.info("Groq model {} not found (404), trying fallback model {}", model, fallbackModel);
+                    Map<String, Object> retryBody = new LinkedHashMap<>(bodyMap);
+                    retryBody.put("model", fallbackModel);
+                    retryBody.put("response_format", Map.of("type", "json_object"));
+                    String retryPayload = json.writeValueAsString(retryBody);
+                    HttpRequest retryReq = HttpRequest.newBuilder(request.uri())
+                            .timeout(Duration.ofSeconds(35))
+                            .header("Content-Type", "application/json")
+                            .header("Authorization", "Bearer " + apiKey)
+                            .POST(HttpRequest.BodyPublishers.ofString(retryPayload, StandardCharsets.UTF_8))
+                            .build();
+                    HttpResponse<String> retryRes = http.send(retryReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                    if (retryRes.statusCode() == 200) {
+                        log.info("Groq fallback to {} succeeded (200 OK)", fallbackModel);
+                        return retryRes;
+                    }
+                    response = retryRes;
+                    status = response.statusCode();
+                }
+            }
 
             // Nếu model chưa hỗ trợ json_schema thì tự động chuyển sang json_object
             if (status == 400 && bodyMap.containsKey("response_format")) {
