@@ -20,6 +20,12 @@ class AiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
 
+    AiGateway aiGateway(ObjectMapper json, boolean enabled, String provider, String anthropicKey, String anthropicModel,
+            String geminiKey, String geminiModel, String geminiBaseUrl) {
+        return aiGateway(json, enabled, provider, anthropicKey, anthropicModel, geminiKey, geminiModel, geminiBaseUrl,
+                "", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1");
+    }
+
     @Bean
     @ConditionalOnMissingBean(AiGateway.class)
     AiGateway aiGateway(ObjectMapper json,

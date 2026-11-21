@@ -31,4 +31,12 @@ class AiConfigTest {
         assertThat(config.aiGateway(json, true, "anthropic", "k", "claude-opus-5-5", "", "g", BASE))
                 .isInstanceOf(ClaudeAiGateway.class);
     }
+
+    @Test
+    void groqProviderUsesTheGroqKeyAndModel() {
+        AiGateway ai = config.aiGateway(json, true, "groq", "", "m", "", "g", BASE,
+                "groq-key", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1");
+        assertThat(ai).isInstanceOf(GroqAiGateway.class);
+        assertThat(ai.model()).isEqualTo("llama-3.3-70b-versatile");
+    }
 }
