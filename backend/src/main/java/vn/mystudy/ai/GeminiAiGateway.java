@@ -75,7 +75,7 @@ class GeminiAiGateway implements AiGateway {
                 "generationConfig", genConfig);
         String jsonPayload = json.writeValueAsString(body);
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/models/" + model + ":generateContent"))
-                .timeout(Duration.ofSeconds(90))
+                .timeout(Duration.ofSeconds(35))
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
@@ -133,7 +133,7 @@ class GeminiAiGateway implements AiGateway {
             if (fallbackUri != null && !fallbackUri.equals(uriStr)) {
                 log.info("Gemini 404 on {}, trying fallback URI {}", uriStr, fallbackUri);
                 HttpRequest fallbackReq = HttpRequest.newBuilder(URI.create(fallbackUri))
-                        .timeout(Duration.ofSeconds(90))
+                        .timeout(Duration.ofSeconds(35))
                         .header("Content-Type", "application/json")
                         .header("x-goog-api-key", apiKey)
                         .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
@@ -151,7 +151,7 @@ class GeminiAiGateway implements AiGateway {
             log.info("Gemini 400 with thinkingConfig, retrying without thinkingConfig");
             String strippedPayload = jsonPayload.replaceAll(",\"thinkingConfig\":\\{[^}]*\\}", "");
             HttpRequest retryReq = HttpRequest.newBuilder(request.uri())
-                    .timeout(Duration.ofSeconds(90))
+                    .timeout(Duration.ofSeconds(35))
                     .header("Content-Type", "application/json")
                     .header("x-goog-api-key", apiKey)
                     .POST(HttpRequest.BodyPublishers.ofString(strippedPayload, StandardCharsets.UTF_8))
@@ -171,6 +171,10 @@ class GeminiAiGateway implements AiGateway {
             throw new BusinessException(ErrorCode.RATE_LIMITED,
                     "Đã hết hạn mức gọi AI của khóa Gemini. Vui lòng thử lại sau ít phút.");
         }
+        if (status == 503) {
+            throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
+                    "Máy chủ Google Gemini đang bị quá tải tạm thời (503 High Demand). Vui lòng thử lại sau 1-2 phút.");
+        }
         if (status == 400 || status == 401 || status == 403 || status == 404) {
             throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
                     "Không gọi được Gemini (status " + status + "): khóa API hoặc tên mô hình (" + model + ") không hợp lệ. Hãy kiểm tra biến GEMINI_API_KEY hoặc GEMINI_MODEL.");
@@ -187,17 +191,17 @@ class GeminiAiGateway implements AiGateway {
                 int status = response.statusCode();
                 if (status == 200) return response;
                 if ((status == 503 || status == 500) && attempt == 1) {
-                    sleep();
+                    sleep(2000);
                     continue;
                 }
                 return response;
             } catch (IOException e) {
                 if (attempt == 1) {
-                    sleep();
+                    sleep(1000);
                     continue;
                 }
                 log.error("Gemini network error", e);
-                throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE, "Không kết nối được dịch vụ AI.");
+                throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE, "Không kết nối được dịch vụ AI (timeout). Vui lòng thử lại.");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE, "Yêu cầu AI bị hủy.");
@@ -205,9 +209,9 @@ class GeminiAiGateway implements AiGateway {
         }
     }
 
-    private static void sleep() {
+    private static void sleep(long millis) {
         try {
-            Thread.sleep(1000);
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
