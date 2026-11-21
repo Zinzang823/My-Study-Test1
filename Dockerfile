@@ -23,6 +23,6 @@ RUN mkdir -p /app/uploads && chown -R 10001:10001 /app/uploads
 COPY --from=backend /app/target/mystudy.jar app.jar
 USER 10001
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
-EXPOSE 8080
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -Xss512k -XX:+ExitOnOutOfMemoryError"
+EXPOSE 10000 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
