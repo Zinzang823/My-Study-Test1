@@ -10,6 +10,7 @@ FROM eclipse-temurin:21-jdk AS backend
 WORKDIR /app
 COPY backend/.mvn .mvn
 COPY backend/mvnw backend/pom.xml ./
+RUN chmod +x ./mvnw
 RUN ./mvnw -B -q dependency:go-offline
 COPY backend/src src
 COPY --from=frontend /app/frontend/dist src/main/resources/static
