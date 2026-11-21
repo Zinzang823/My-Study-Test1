@@ -59,13 +59,19 @@ class GeminiAiGateway implements AiGateway {
 
     @Override
     public <T> T generate(String systemPrompt, String userPrompt, Class<T> type, long maxTokens) {
+        Map<String, Object> genConfig = new LinkedHashMap<>();
+        genConfig.put("responseMimeType", "application/json");
+        genConfig.put("responseJsonSchema", JsonSchemas.of(type));
+        genConfig.put("maxOutputTokens", maxTokens);
+        if (model.contains("gemini-3")) {
+            // Giảm độ trễ suy nghĩ xuống mức LOW để phản hồi nhanh nhất (2-3 giây)
+            genConfig.put("thinkingConfig", Map.of("thinkingLevel", "LOW"));
+        }
+
         Map<String, Object> body = Map.of(
                 "systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))),
                 "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userPrompt)))),
-                "generationConfig", Map.of(
-                        "responseMimeType", "application/json",
-                        "responseJsonSchema", JsonSchemas.of(type),
-                        "maxOutputTokens", maxTokens));
+                "generationConfig", genConfig);
         String jsonPayload = json.writeValueAsString(body);
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/models/" + model + ":generateContent"))
                 .timeout(Duration.ofSeconds(90))
@@ -138,6 +144,23 @@ class GeminiAiGateway implements AiGateway {
                 response = fallbackRes;
                 status = response.statusCode();
             }
+        }
+
+        if (status == 400 && jsonPayload.contains("thinkingConfig")) {
+            log.info("Gemini 400 with thinkingConfig, retrying without thinkingConfig");
+            String strippedPayload = jsonPayload.replaceAll(",\"thinkingConfig\":\\{[^}]*\\}", "");
+            HttpRequest retryReq = HttpRequest.newBuilder(request.uri())
+                    .timeout(Duration.ofSeconds(90))
+                    .header("Content-Type", "application/json")
+                    .header("x-goog-api-key", apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(strippedPayload, StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<String> retryRes = executeWithRetry(retryReq);
+            if (retryRes.statusCode() == 200) {
+                return retryRes;
+            }
+            response = retryRes;
+            status = response.statusCode();
         }
 
         String detail = response.body() == null ? "" : response.body();
