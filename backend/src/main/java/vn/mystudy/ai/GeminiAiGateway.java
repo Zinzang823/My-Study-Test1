@@ -118,12 +118,10 @@ class GeminiAiGateway implements AiGateway {
         if (status == 404) {
             String uriStr = request.uri().toString();
             String fallbackUri = null;
-            if (uriStr.contains("gemini-1.5")) {
-                fallbackUri = uriStr.replace("gemini-1.5-flash", "gemini-2.0-flash");
-            } else if (uriStr.contains("gemini-2.5")) {
-                fallbackUri = uriStr.replace("gemini-2.5-flash", "gemini-2.0-flash");
-            } else if (uriStr.contains("/v1beta/models/")) {
-                fallbackUri = uriStr.replace("/v1beta/models/", "/v1/models/");
+            if (uriStr.contains("gemini-1.5") || uriStr.contains("gemini-2.0") || uriStr.contains("gemini-2.5")) {
+                fallbackUri = uriStr.replaceAll("gemini-[12]\\.[05]-flash", "gemini-3.8-flash");
+            } else if (uriStr.contains("/v1/models/")) {
+                fallbackUri = uriStr.replace("/v1/models/", "/v1beta/models/");
             }
             if (fallbackUri != null && !fallbackUri.equals(uriStr)) {
                 log.info("Gemini 404 on {}, trying fallback URI {}", uriStr, fallbackUri);
