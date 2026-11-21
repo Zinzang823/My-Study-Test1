@@ -10,4 +10,5 @@ target/
 .env.local
 .env.*.local
 backend/src/main/resources/static/
+.m2/
 BTEC Best Coder - MyStudy/
