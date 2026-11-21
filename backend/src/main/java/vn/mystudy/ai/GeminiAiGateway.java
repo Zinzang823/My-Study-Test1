@@ -44,7 +44,7 @@ class GeminiAiGateway implements AiGateway {
         this.json = json;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.apiKey = apiKey;
-        this.model = model;
+        this.model = model.startsWith("models/") ? model.substring(7) : model;
     }
 
     @Override
@@ -66,14 +66,15 @@ class GeminiAiGateway implements AiGateway {
                         "responseMimeType", "application/json",
                         "responseJsonSchema", JsonSchemas.of(type),
                         "maxOutputTokens", maxTokens));
+        String jsonPayload = json.writeValueAsString(body);
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/models/" + model + ":generateContent"))
                 .timeout(Duration.ofSeconds(90))
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = send(request);
+        HttpResponse<String> response = send(request, jsonPayload);
         JsonNode root = json.readTree(response.body());
 
         String blockReason = root.path("promptFeedback").path("blockReason").asString("");
@@ -108,8 +109,55 @@ class GeminiAiGateway implements AiGateway {
         }
     }
 
-    /** Gửi yêu cầu; thử lại một lần khi máy chủ Gemini quá tải tạm thời (503) hoặc lỗi mạng. */
-    private HttpResponse<String> send(HttpRequest request) {
+    /** Gửi yêu cầu; tự động chuyển sang mô hình/endpoint tương thích nếu 404 (do phiên bản v1 vs v1beta của Google). */
+    private HttpResponse<String> send(HttpRequest request, String jsonPayload) {
+        HttpResponse<String> response = executeWithRetry(request);
+        int status = response.statusCode();
+        if (status == 200) return response;
+
+        if (status == 404) {
+            String uriStr = request.uri().toString();
+            String fallbackUri = null;
+            if (uriStr.contains("gemini-1.5")) {
+                fallbackUri = uriStr.replace("gemini-1.5-flash", "gemini-2.0-flash");
+            } else if (uriStr.contains("gemini-2.5")) {
+                fallbackUri = uriStr.replace("gemini-2.5-flash", "gemini-2.0-flash");
+            } else if (uriStr.contains("/v1beta/models/")) {
+                fallbackUri = uriStr.replace("/v1beta/models/", "/v1/models/");
+            }
+            if (fallbackUri != null && !fallbackUri.equals(uriStr)) {
+                log.info("Gemini 404 on {}, trying fallback URI {}", uriStr, fallbackUri);
+                HttpRequest fallbackReq = HttpRequest.newBuilder(URI.create(fallbackUri))
+                        .timeout(Duration.ofSeconds(90))
+                        .header("Content-Type", "application/json")
+                        .header("x-goog-api-key", apiKey)
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                        .build();
+                HttpResponse<String> fallbackRes = executeWithRetry(fallbackReq);
+                if (fallbackRes.statusCode() == 200) {
+                    return fallbackRes;
+                }
+                response = fallbackRes;
+                status = response.statusCode();
+            }
+        }
+
+        String detail = response.body() == null ? "" : response.body();
+        log.error("Gemini API error status={} body={}", status,
+                detail.substring(0, Math.min(500, detail.length())));
+        if (status == 429) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED,
+                    "Đã hết hạn mức gọi AI của khóa Gemini. Vui lòng thử lại sau ít phút.");
+        }
+        if (status == 400 || status == 401 || status == 403 || status == 404) {
+            throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
+                    "Không gọi được Gemini (status " + status + "): khóa API hoặc tên mô hình (" + model + ") không hợp lệ. Hãy kiểm tra biến GEMINI_API_KEY hoặc GEMINI_MODEL.");
+        }
+        throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
+                "Dịch vụ AI tạm thời gián đoạn. Vui lòng thử lại.");
+    }
+
+    private HttpResponse<String> executeWithRetry(HttpRequest request) {
         for (int attempt = 1; ; attempt++) {
             try {
                 HttpResponse<String> response = http.send(request,
@@ -120,20 +168,7 @@ class GeminiAiGateway implements AiGateway {
                     sleep();
                     continue;
                 }
-                // Thân lỗi của Google không chứa khóa API; chỉ ghi phần đầu để chẩn đoán.
-                String detail = response.body() == null ? "" : response.body();
-                log.error("Gemini API error status={} body={}", status,
-                        detail.substring(0, Math.min(500, detail.length())));
-                if (status == 429) {
-                    throw new BusinessException(ErrorCode.RATE_LIMITED,
-                            "Đã hết hạn mức gọi AI của khóa Gemini. Vui lòng thử lại sau ít phút.");
-                }
-                if (status == 400 || status == 401 || status == 403 || status == 404) {
-                    throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
-                            "Không gọi được Gemini (status " + status + "): khóa API hoặc tên mô hình (" + model + ") không hợp lệ. Hãy kiểm tra biến GEMINI_API_KEY hoặc GEMINI_MODEL.");
-                }
-                throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
-                        "Dịch vụ AI tạm thời gián đoạn. Vui lòng thử lại.");
+                return response;
             } catch (IOException e) {
                 if (attempt == 1) {
                     sleep();
