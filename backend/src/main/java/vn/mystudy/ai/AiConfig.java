@@ -29,8 +29,21 @@ class AiConfig {
             @Value("${app.ai.model:claude-opus-5-5}") String anthropicModel,
             @Value("${app.ai.gemini-api-key:}") String geminiKey,
             @Value("${app.ai.gemini-model:gemini-2.5-flash-lite}") String geminiModel,
-            @Value("${app.ai.gemini-base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl) {
-        boolean gemini = "gemini".equalsIgnoreCase(provider.trim());
+            @Value("${app.ai.gemini-base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl,
+            @Value("${app.ai.groq-api-key:}") String groqKey,
+            @Value("${app.ai.groq-model:llama-3.3-70b-versatile}") String groqModel,
+            @Value("${app.ai.groq-base-url:https://api.groq.com/openai/v1}") String groqBaseUrl) {
+        String p = provider != null ? provider.trim().toLowerCase() : "gemini";
+        if ("groq".equals(p) || (groqKey != null && !groqKey.isBlank() && (geminiKey == null || geminiKey.isBlank()))) {
+            if (!enabled || groqKey == null || groqKey.isBlank()) {
+                log.info("AI features disabled (app.ai.enabled={}, provider=groq, api key present={})",
+                        enabled, groqKey != null && !groqKey.isBlank());
+                return new DisabledAiGateway();
+            }
+            log.info("AI features enabled with Groq model {}", groqModel);
+            return new GroqAiGateway(json, groqBaseUrl, groqKey.trim(), groqModel);
+        }
+        boolean gemini = "gemini".equals(p);
         String key = gemini ? geminiKey : anthropicKey;
         if (!enabled || key == null || key.isBlank()) {
             log.info("AI features disabled (app.ai.enabled={}, provider={}, api key present={})", enabled,
