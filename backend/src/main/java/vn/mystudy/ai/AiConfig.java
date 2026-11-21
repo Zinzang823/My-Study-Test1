@@ -24,11 +24,11 @@ class AiConfig {
     @ConditionalOnMissingBean(AiGateway.class)
     AiGateway aiGateway(ObjectMapper json,
             @Value("${app.ai.enabled:false}") boolean enabled,
-            @Value("${app.ai.provider:anthropic}") String provider,
+            @Value("${app.ai.provider:gemini}") String provider,
             @Value("${app.ai.api-key:}") String anthropicKey,
             @Value("${app.ai.model:claude-opus-5-5}") String anthropicModel,
             @Value("${app.ai.gemini-api-key:}") String geminiKey,
-            @Value("${app.ai.gemini-model:gemini-3.5-flash-lite}") String geminiModel,
+            @Value("${app.ai.gemini-model:gemini-2.5-flash}") String geminiModel,
             @Value("${app.ai.gemini-base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl) {
         boolean gemini = "gemini".equalsIgnoreCase(provider.trim());
         String key = gemini ? geminiKey : anthropicKey;
