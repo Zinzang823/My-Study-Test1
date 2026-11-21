@@ -102,7 +102,7 @@ app:
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${AI_MODEL:claude-opus-5-5}
     gemini-api-key: ${GEMINI_API_KEY:}
-    gemini-model: ${GEMINI_MODEL:gemini-2.5-flash}
+    gemini-model: ${GEMINI_MODEL:gemini-1.5-flash}
     gemini-base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     # Số lượt gọi AI tối đa mỗi người học mỗi ngày (kết quả đã lưu không tính lượt).
     daily-limit: ${AI_DAILY_LIMIT:30}

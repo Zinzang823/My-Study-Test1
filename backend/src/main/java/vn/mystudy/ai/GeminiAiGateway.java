@@ -128,9 +128,9 @@ class GeminiAiGateway implements AiGateway {
                     throw new BusinessException(ErrorCode.RATE_LIMITED,
                             "Đã hết hạn mức gọi AI của khóa Gemini. Vui lòng thử lại sau ít phút.");
                 }
-                if (status == 400 || status == 401 || status == 403) {
+                if (status == 400 || status == 401 || status == 403 || status == 404) {
                     throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
-                            "Không gọi được Gemini: khóa API hoặc tên mô hình không hợp lệ. Hãy báo quản trị viên.");
+                            "Không gọi được Gemini (status " + status + "): khóa API hoặc tên mô hình (" + model + ") không hợp lệ. Hãy kiểm tra biến GEMINI_API_KEY hoặc GEMINI_MODEL.");
                 }
                 throw new BusinessException(ErrorCode.SERVICE_UNAVAILABLE,
                         "Dịch vụ AI tạm thời gián đoạn. Vui lòng thử lại.");

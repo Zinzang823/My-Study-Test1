@@ -28,7 +28,7 @@ class AiConfig {
             @Value("${app.ai.api-key:}") String anthropicKey,
             @Value("${app.ai.model:claude-opus-5-5}") String anthropicModel,
             @Value("${app.ai.gemini-api-key:}") String geminiKey,
-            @Value("${app.ai.gemini-model:gemini-2.5-flash}") String geminiModel,
+            @Value("${app.ai.gemini-model:gemini-1.5-flash}") String geminiModel,
             @Value("${app.ai.gemini-base-url:https://generativelanguage.googleapis.com/v1beta}") String geminiBaseUrl) {
         boolean gemini = "gemini".equalsIgnoreCase(provider.trim());
         String key = gemini ? geminiKey : anthropicKey;
