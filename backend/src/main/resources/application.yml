@@ -1,0 +1,112 @@
+spring:
+  application:
+    name: mystudy
+  config:
+    import: optional:file:.env.local[.properties]
+  web:
+    resources:
+      add-mappings: false
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+  session:
+    jdbc:
+      initialize-schema: never
+      cleanup-cron: "0 */5 * * * *"
+  flyway:
+    # CSDL đã tạo bằng migration 001-005 chạy tay được nhận làm điểm xuất phát (baseline).
+    baseline-on-migrate: true
+    baseline-version: "5"
+    validate-on-migrate: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Schema do Flyway quản lý; Hibernate chỉ kiểm tra entity khớp với schema.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+        format_sql: false
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 5000
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  max-http-request-header-size: 16KB
+  servlet:
+    session:
+      timeout: 7d
+      cookie:
+        name: mystudy_session
+        http-only: true
+        same-site: lax
+        path: /
+        max-age: 7d
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+  tomcat:
+    threads:
+      max: 40
+    max-swallow-size: 25MB
+    max-http-form-post-size: 25MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    mail:
+      enabled: false
+
+app:
+  origin: ${APP_ORIGIN:http://localhost:5173}
+  database-url: ${DATABASE_URL:}
+  google-client-id: ${GOOGLE_CLIENT_ID:}
+  google-client-secret: ${GOOGLE_CLIENT_SECRET:}
+  admin-email: ${ADMIN_EMAIL:ngocbhbymit@gmail.com, ductrung1232013@gmail.com, h.nam2k707@gmail.com}
+  ai:
+    # Bật tính năng AI: đặt AI_ENABLED=true và ANTHROPIC_API_KEY (chỉ ở máy chủ, không commit).
+    enabled: ${AI_ENABLED:false}
+    # Nhà cung cấp: anthropic (Claude, mặc định) hoặc gemini (Google).
+    provider: ${AI_PROVIDER:anthropic}
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${AI_MODEL:claude-opus-5-5}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+    gemini-base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+    # Số lượt gọi AI tối đa mỗi người học mỗi ngày (kết quả đã lưu không tính lượt).
+    daily-limit: ${AI_DAILY_LIMIT:30}
+  # Số lần thử đăng nhập/đăng ký tối đa mỗi phút trên mỗi địa chỉ IP.
+  auth-attempts-per-minute: 10
+  # Số lần đăng nhập sai tối đa trên mỗi email trong 15 phút.
+  failed-logins-per-email: 8
